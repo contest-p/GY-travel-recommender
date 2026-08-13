@@ -1,0 +1,18 @@
+# 가상환경
+venv/
+env/
+
+# 환경변수 (API 키 - 절대 공개 금지!)
+.env
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+
+# VS Code 설정
+.vscode/
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
