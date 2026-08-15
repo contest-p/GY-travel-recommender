@@ -36,18 +36,11 @@ def validate_date(date_str):
 
 
 # ==========================================
-# ⭐ NEW: Gemini API 호출 함수
+# Gemini API 호출 함수 (여행지 추천)
 # ==========================================
 def get_travel_recommendation(date_str, weekday):
     """
     Gemini API를 호출하여 여행 추천을 받아옴
-    
-    Args:
-        date_str: "2025-11-15" 형식의 날짜 문자열
-        weekday: "토요일" 등의 요일 문자열
-    
-    Returns:
-        dict: {recommended_city, weather, events, reason}
     """
     
     # 🎨 프롬프트 설계 (JSON 강제!)
@@ -71,28 +64,23 @@ def get_travel_recommendation(date_str, weekday):
     # 🔄 최대 2번 시도 (실패 시 재시도 1회)
     for attempt in range(2):
         try:
-            print(f"\n🤖 Gemini API 호출 중... (시도 {attempt + 1}/2)")
+            print(f"\n🤖 [1/3] 1차 추천 생성 중(LLM)... (시도 {attempt + 1}/2)")
             
-            # API 호출
             response = client.chat.completions.create(
                 model="gemini-3.6-flash",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,  # 창의성 (0=일관성, 1=창의성)
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,  
             )
             
-            # 응답 텍스트 추출
             content = response.choices[0].message.content.strip()
             
-            # 🧹 마크다운 코드블록 제거 (```json ... ``` 방지)
+            # 🧹 마크다운 코드블록 제거
             if content.startswith("```"):
                 content = content.split("```")[1]
                 if content.startswith("json"):
                     content = content[4:]
                 content = content.strip()
             
-            # 📦 JSON 파싱
             data = json.loads(content)
             
             # ✅ 필수 키 검증
@@ -102,18 +90,11 @@ def get_travel_recommendation(date_str, weekday):
             if missing_keys:
                 raise ValueError(f"필수 키 누락: {missing_keys}")
             
-            print("✅ Gemini 응답 파싱 성공!")
+            print(f"  - recommended_city: \"{data['recommended_city']}\"")
             return data
             
-        except json.JSONDecodeError as e:
-            print(f"⚠️  JSON 파싱 실패: {e}")
-            if attempt == 0:
-                print("🔄 재시도합니다...")
-            else:
-                print("❌ 재시도도 실패했습니다.")
-                raise
-        except ValueError as e:
-            print(f"⚠️  검증 실패: {e}")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"⚠️  검증/파싱 실패: {e}")
             if attempt == 0:
                 print("🔄 재시도합니다...")
             else:
@@ -123,134 +104,167 @@ def get_travel_recommendation(date_str, weekday):
             print(f"❌ API 호출 에러: {e}")
             raise
 
+
 # ==========================================
-# ⭐ NEW: Kakao 맛집 검색 함수
+# Kakao 맛집 검색 함수
 # ==========================================
 def search_restaurants(city_name):
     """
     Kakao Local API로 특정 도시의 맛집 5곳을 검색
-    
-    Args:
-        city_name: "경주" 같은 도시 이름
-    
-    Returns:
-        dict: {
-            "restaurants": [맛집 리스트],
-            "errors": [에러 메시지 리스트]
-        }
     """
-    
-    # 📍 Kakao 로컬 검색 API 주소 (키워드로 장소 검색)
     url = "https://dapi.kakao.com/v2/local/search/keyword.json"
-    
-    # 🔐 인증 헤더 (KakaoAK + 공백 + REST API 키)
-    headers = {
-        "Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"
-    }
-    
-    # 🔍 검색 조건 설정
+    headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
     params = {
-        "query": f"{city_name} 맛집",  # 검색어 (예: "경주 맛집")
-        "size": 5,                      # 결과 5개만 (최대 15개까지 가능)
-        "sort": "accuracy"              # 정확도순 정렬 (or "distance" 거리순)
+        "query": f"{city_name} 맛집", 
+        "size": 5,                      
+        "sort": "accuracy"              
     }
     
-    # 📦 결과를 담을 딕셔너리 (성공한 맛집 + 에러 로그)
-    result = {
-        "restaurants": [],  # 맛집 정보 리스트
-        "errors": []        # 에러 발생 시 기록
-    }
+    result = {"restaurants": [], "errors": []}
     
     try:
-        print(f"\n🍽️  Kakao API 호출 중... ({city_name} 맛집 검색)")
+        print(f"\n🍽️  [2/3] 맛집 검색 중(지도/장소 API)...")
         
-        # 🌐 HTTP GET 요청 보내기 (timeout: 10초 안에 응답 없으면 에러)
         response = requests.get(url, headers=headers, params=params, timeout=10)
         
-        # 🚨 인증 에러 특별 처리 (401=인증 실패, 403=권한 없음)
         if response.status_code == 401:
-            error_msg = "❌ Kakao API 인증 실패 (401): REST API 키를 확인하세요!"
-            print(error_msg)
-            result["errors"].append(error_msg)
-            return result  # 빈 리스트 + 에러 메시지 반환
-        
-        if response.status_code == 403:
-            error_msg = "❌ Kakao API 권한 없음 (403): 앱 설정에서 로컬 API 활성화 확인!"
-            print(error_msg)
-            result["errors"].append(error_msg)
+            error_msg = "인증 실패(401). 키 설정을 확인하세요."
+            print(f"  - 오류: {error_msg}")
+            result["errors"].append({"step": "place_search", "type": "AUTH_ERROR", "message": error_msg})
             return result
         
-        # 🔍 그 외 HTTP 에러 확인 (4xx, 5xx 응답 → 예외 발생)
+        if response.status_code == 403:
+            error_msg = "권한 없음(403). 앱 설정에서 로컬 API 활성화 확인!"
+            print(f"  - 오류: {error_msg}")
+            result["errors"].append({"step": "place_search", "type": "AUTH_ERROR", "message": error_msg})
+            return result
+        
         response.raise_for_status()
-        
-        # 📦 JSON 응답 파싱 (문자열 → 딕셔너리)
         data = response.json()
-        
-        # 📋 검색 결과 꺼내기 (documents 키 안에 장소 리스트)
         documents = data.get("documents", [])
         
-        # 🈳 검색 결과 0건 처리
         if not documents:
-            error_msg = f"⚠️  '{city_name} 맛집' 검색 결과가 0건입니다."
-            print(error_msg)
-            result["errors"].append(error_msg)
-            return result  # 빈 리스트 반환 (프로그램 중단 X)
+            error_msg = f"'{city_name} 맛집' 검색 결과 0건"
+            print(f"  - {error_msg}")
+            result["errors"].append({"step": "place_search", "type": "EMPTY_RESULT", "message": error_msg})
+            return result 
         
-        # 🔄 각 맛집 정보를 우리 형식으로 변환
         for doc in documents:
             restaurant = {
-                "name": doc.get("place_name", "이름 없음"),        # 상호명
-                "address": doc.get("address_name", "주소 없음"),   # 지번 주소
-                "category": doc.get("category_name", "분류 없음"), # 카테고리 (음식점 > 한식 > ...)
-                "url": doc.get("place_url", ""),                   # 카카오맵 상세 URL
-                "x": doc.get("x", ""),                             # 경도 (longitude)
-                "y": doc.get("y", "")                              # 위도 (latitude)
+                "name": doc.get("place_name", "이름 없음"),
+                "address": doc.get("address_name", "주소 없음"),
+                "category": doc.get("category_name", "분류 없음"),
+                "url": doc.get("place_url", ""),
+                "x": doc.get("x", ""),
+                "y": doc.get("y", "")
             }
-            result["restaurants"].append(restaurant)  # 리스트에 추가
+            result["restaurants"].append(restaurant)
         
-        print(f"✅ Kakao 응답 파싱 성공! (맛집 {len(result['restaurants'])}곳)")
+        print(f"  - 맛집 {len(result['restaurants'])}곳 검색 완료")
         return result
         
-    except requests.exceptions.Timeout:
-        # ⏱️ 타임아웃 에러 (10초 초과)
-        error_msg = "❌ Kakao API 응답 시간 초과 (10초)"
-        print(error_msg)
-        result["errors"].append(error_msg)
+    except Exception as e:
+        error_msg = f"요청 실패: {str(e)}"
+        print(f"  - 오류: {error_msg}")
+        result["errors"].append({"step": "place_search", "type": "REQUEST_ERROR", "message": error_msg})
         return result
+
+
+# ==========================================
+# ⭐ NEW: 2차 LLM API 호출 (최종 리포트 생성)
+# ==========================================
+def generate_final_report(date_str, recommendation, restaurant_data):
+    """
+    1차 추천 데이터와 2차 맛집 데이터를 종합해 마크다운 리포트를 작성합니다.
+    """
+    print("\n📝 [3/3] 최종 리포트 생성 중(LLM)...")
+    
+    city = recommendation.get("recommended_city", "알 수 없음")
+    weather = recommendation.get("weather", "정보 없음")
+    events = ", ".join(recommendation.get("events", []))
+    reason = recommendation.get("reason", "정보 없음")
+    
+    # 맛집 리스트를 프롬프트에 넣기 좋게 텍스트로 변환
+    restaurants = restaurant_data.get("restaurants", [])
+    if restaurants:
+        restaurant_text = "\n".join([f"- {r['name']} ({r['category']}) : {r['address']}" for r in restaurants])
+    else:
+        restaurant_text = "데이터 없음 (검색된 맛집이 없습니다.)"
+
+    prompt = f"""당신은 훌륭한 여행 가이드입니다.
+다음 수집된 정보들을 바탕으로 '{date_str} 국내 여행 추천 리포트'를 마크다운(Markdown) 형식으로 예쁘게 작성해주세요.
+
+[기본 정보]
+- 추천 도시: {city}
+- 날씨 요약: {weather}
+- 행사/축제: {events}
+- 추천 이유: {reason}
+
+[맛집 정보]
+{restaurant_text}
+
+아래의 제목(Heading)들을 반드시 포함하여 리포트를 작성해 주세요.
+## 추천 지역
+## 추천 이유
+## 날씨 요약
+## 행사/축제
+## 맛집 추천
+## 1일 일정 제안 (오전/오후/저녁으로 나누어 자연스럽게 작성)
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gemini-3.6-flash",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        print("  - 리포트 생성 완료")
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"❌ 리포트 생성 중 에러 발생: {e}")
+        return f"# 리포트 생성 실패\n\n- 발생한 에러: {e}"
+
+
+# ==========================================
+# ⭐ NEW: 결과 파일 저장
+# ==========================================
+def save_results(date_str, recommendation, restaurant_data, report_md):
+    """
+    results 폴더를 만들고 JSON 파일과 마크다운 파일을 저장합니다.
+    """
+    os.makedirs("results", exist_ok=True)
+    
+    # 원본 데이터를 하나로 묶어 JSON으로 저장
+    final_json_data = {
+        "recommendation": recommendation,
+        "restaurants": restaurant_data.get("restaurants", []),
+        "errors": restaurant_data.get("errors", [])
+    }
+    
+    json_filename = f"results/{date_str}_data.json"
+    md_filename = f"results/{date_str}_travel_plan.md"
+    
+    with open(json_filename, "w", encoding="utf-8") as f:
+        json.dump(final_json_data, f, ensure_ascii=False, indent=2)
         
-    except requests.exceptions.RequestException as e:
-        # 🌐 네트워크 에러 (연결 실패, DNS 에러 등)
-        error_msg = f"❌ Kakao API 요청 실패: {e}"
-        print(error_msg)
-        result["errors"].append(error_msg)
-        return result
+    with open(md_filename, "w", encoding="utf-8") as f:
+        f.write(report_md)
         
-    except json.JSONDecodeError as e:
-        # 📦 JSON 파싱 에러 (응답이 이상할 때)
-        error_msg = f"❌ Kakao API 응답 JSON 파싱 실패: {e}"
-        print(error_msg)
-        result["errors"].append(error_msg)
-        return result
+    print(f"\n완료! {md_filename} 를 확인하세요.")
 
 
 # ==========================================
 # 메인 함수
 # ==========================================
 def main():
-    # API 키 확인
-    print("🔐 API 키 확인 중...")
     if not GEMINI_API_KEY or not KAKAO_REST_API_KEY:
         print("❌ API 키가 설정되지 않았습니다. .env 파일을 확인하세요.")
         return
-    print("✅ API 키 로드 완료!\n")
     
-    # argparse 설정
-    parser = argparse.ArgumentParser(
-        description="🌍 AI 여행 추천 프로그램",
-        formatter_class=argparse.RawTextHelpFormatter
-    )
+    # 명령어로 실행할 때 옵션 설정 (-date, --date 모두 가능하도록 수정)
+    parser = argparse.ArgumentParser(description="🌍 AI 여행 추천 프로그램")
     parser.add_argument(
-        "--date",
+        "-date", "--date",
         type=validate_date,
         required=True,
         help="여행 날짜 (형식: YYYY-MM-DD, 예: 2025-11-15)"
@@ -260,66 +274,25 @@ def main():
     date_obj = args.date
     date_str = date_obj.strftime("%Y-%m-%d")
     
-    # 요일 계산
     weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
     weekday = weekdays[date_obj.weekday()]
     
-    # 헤더 출력
-    print("=" * 50)
-    print("🌍 여행 추천 프로그램 시작!")
-    print("=" * 50)
-    print(f"\n📅 입력받은 날짜: {date_str}")
-    print(f"📌 파싱된 날짜: {date_obj.strftime('%Y년 %m월 %d일')}")
-    print(f"🗓️  요일: {weekday}")
-    
-    # ⭐ NEW: Gemini API 호출!
     try:
+        # 1. 여행지 추천 받기 (LLM)
         recommendation = get_travel_recommendation(date_str, weekday)
         
-        # 🎨 결과 출력
-        print("\n" + "=" * 50)
-        print("🎯 AI 여행 추천 결과")
-        print("=" * 50)
-        print(f"\n🏙️  추천 도시: {recommendation['recommended_city']}")
-        print(f"🌤️  예상 날씨: {recommendation['weather']}")
-        print(f"🎉 행사/축제:")
-        for event in recommendation['events']:
-            print(f"    - {event}")
-        #반복문 끝
-        print(f"\n💡 추천 이유: {recommendation['reason']}") #반복문 밖
+        # 2. 맛집 검색하기 (Kakao API)
+        city = recommendation['recommended_city']
+        restaurant_data = search_restaurants(city)
         
-        # ⭐ NEW: 추천 도시의 맛집 검색!
-        city = recommendation['recommended_city']  # 추천받은 도시 이름 추출
-        restaurant_data = search_restaurants(city)  # Kakao API 호출!
+        # 3. 종합 리포트 생성 (LLM)
+        report_md = generate_final_report(date_str, recommendation, restaurant_data)
         
-        # 🍽️ 맛집 결과 출력
-        print("\n" + "=" * 50)
-        print(f"🍽️  {city} 추천 맛집 TOP 5")
-        print("=" * 50)
-        
-        # 맛집이 하나라도 있으면 출력
-        if restaurant_data["restaurants"]:
-            for idx, restaurant in enumerate(restaurant_data["restaurants"], 1):
-                # enumerate(리스트, 1): 인덱스 1부터 시작 (1번, 2번, 3번...)
-                print(f"\n[{idx}] {restaurant['name']}")           # 상호명
-                print(f"    📍 주소: {restaurant['address']}")     # 주소
-                print(f"    🏷️  분류: {restaurant['category']}")   # 카테고리
-                print(f"    🔗 링크: {restaurant['url']}")         # 카카오맵 URL
-        else:
-            print("\n⚠️  검색된 맛집이 없습니다.")
-        
-        # 🚨 에러가 있었다면 안내
-        if restaurant_data["errors"]:
-            print("\n⚠️  발생한 에러:")
-            for err in restaurant_data["errors"]:
-                print(f"   - {err}")
+        # 4. 파일로 저장하기
+        save_results(date_str, recommendation, restaurant_data, report_md)
         
     except Exception as e:
-        print(f"\n❌ 여행 추천 실패: {e}")
+        print(f"\n❌ 프로그램 실행 중 문제가 발생했습니다: {e}")
 
-
-# ==========================================
-# 실행 시작점
-# ==========================================
 if __name__ == "__main__":
     main()
