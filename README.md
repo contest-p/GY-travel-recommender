@@ -63,7 +63,7 @@ source venv/bin/activate
 
 > 💡 활성화되면 프롬프트 앞에 `(venv)`가 표시됩니다!
 
-### 3️⃣ 필수 라이브러리 설치
+### 3️⃣ 필수 라이브러리 설치.
 
 ```bash
 pip install -r requirements.txt
@@ -91,7 +91,7 @@ pip install -r requirements.txt
 
 ```env
 GEMINI_API_KEY=여기에_Gemini_키_붙여넣기
-KAKAO_API_KEY=여기에_Kakao_REST_API_키_붙여넣기
+KAKAO_REST_API_KEY=여기에_Kakao_REST_API_키_붙여넣기
 ```
 
 > ⚠️ **주의!** 따옴표(`"`, `'`) 없이 작성하세요!
