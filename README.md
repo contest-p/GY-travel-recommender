@@ -203,10 +203,4 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 ---
 
-## 📜 라이선스
-
-MIT License
-
----
-
 **🎉 이제 여행 준비 완료! 즐거운 여행 되세요!** ✈️🌍
